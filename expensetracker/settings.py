@@ -12,12 +12,12 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 import os
-import django_heroku
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-
+from django.contrib import messages
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'expenses',
+    'authentication',
 ]
 
 MIDDLEWARE = [
@@ -132,4 +133,15 @@ STATIC_ROOT=os.path.join(BASE_DIR,'static')
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-django_heroku.settings(locals())
+
+MESSAGES_TAGS={
+    messages.ERROR:'danger'
+}
+
+
+EMAIL_HOST=os.environ.get['EMAIL_HOST']
+EMAIL_HOST_USER=os.environ.get['EMAIL_HOST_USER']
+EMAIL_USE_TLS=True
+DEFAULT_FROM_EMAIL=os.environ.get['DEFAULT_FROM_EMAIL']
+EMAIL_PORT=587
+EMAIL_HOST_PASSWORD=os.environ.get['EMAIL_HOST_PASSWORD']

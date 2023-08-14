@@ -8,6 +8,7 @@ django = "*"
 django-heroku = "*"
 gunicorn = "*"
 waitress = "*"
+validate-email = "*"
 
 [dev-packages]
 
