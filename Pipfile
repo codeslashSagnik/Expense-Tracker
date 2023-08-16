@@ -9,6 +9,8 @@ django-heroku = "*"
 gunicorn = "*"
 waitress = "*"
 validate-email = "*"
+six = "*"
+python-dotenv = "*"
 
 [dev-packages]
 

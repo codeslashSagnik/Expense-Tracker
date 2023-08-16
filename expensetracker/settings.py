@@ -12,10 +12,51 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 import os
+import smtplib
+
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+def load_env_vars():
+    env_file_path = os.path.join(BASE_DIR, ".env")
+    print("Content of .env: ")
+    with open(env_file_path, 'r') as file:
+        for line in file:
+            if line.strip():
+                name, value = line.strip().split("=", 1)
+                os.environ[name] = value
+                print(name, "=", value)
+
+load_env_vars()
+
+
+LOGGING_DIR = os.path.join(BASE_DIR, 'logs')  # Change to your desired log directory
+
+if not os.path.exists(LOGGING_DIR):
+    os.mkdir(LOGGING_DIR)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(LOGGING_DIR, 'debug.log'),
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
+}
+
+
 
 from django.contrib import messages
 # Quick-start development settings - unsuitable for production
@@ -137,11 +178,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MESSAGES_TAGS={
     messages.ERROR:'danger'
 }
-
-
-EMAIL_HOST=os.environ.get['EMAIL_HOST']
-EMAIL_HOST_USER=os.environ.get['EMAIL_HOST_USER']
-EMAIL_USE_TLS=True
-DEFAULT_FROM_EMAIL=os.environ.get['DEFAULT_FROM_EMAIL']
-EMAIL_PORT=587
-EMAIL_HOST_PASSWORD=os.environ.get['EMAIL_HOST_PASSWORD']
+EMAIL_BACKEND ='django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.environ.get('EMAIL_HOST')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+EMAIL_USE_TLS = True
+DEFAULT_FROM_EMAIL = os.environ.get('EMAIL_HOST_USER')
+EMAIL_PORT = 587
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+print("Email User:", os.environ.get('EMAIL_HOST_USER'))
+print("Email Password:", os.environ.get('EMAIL_HOST_PASSWORD'))
+print(os.path.join(BASE_DIR, ".env"))

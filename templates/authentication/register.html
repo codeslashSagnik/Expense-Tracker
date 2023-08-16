@@ -38,7 +38,7 @@
         </div>
 
       <form action="{% url 'register' %}" method="post">
-        {%include 'partials/messages.html' %}
+        {% include 'partials/messages.html' %}
           {% csrf_token %}
           
           <div class="form-group custom-gap"> <!-- Added custom-gap class -->

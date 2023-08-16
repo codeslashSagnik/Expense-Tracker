@@ -8,14 +8,39 @@ from django.contrib import messages
 import re
 from django.core.mail import EmailMessage
 from django.contrib.sites.shortcuts import get_current_site
-from django.utils.encoding import force_bytes, force_text, DjangoUnicodeDecodeError
+from django.utils.encoding import force_bytes, force_str, DjangoUnicodeDecodeError
 from django.core.mail import send_mail
 from django.contrib.sites.shortcuts import get_current_site
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.template.loader import render_to_string
-from .utils import account_activation_token
+from .utils import token_generator
 from django.urls import reverse
 from django.contrib import auth
+from django.conf import settings
+import smtplib
+from django.core.mail import send_mail
+import traceback
+import logging
+
+def send_email_using_smtp(subject, body, to_email):
+    
+    print("Trying to send email...")  # Debug statement
+
+
+    from_email = settings.EMAIL_HOST_USER
+    app_password = settings.EMAIL_HOST_PASSWORD
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        print("Starting tls...")
+        response=server.login(from_email, app_password)
+        print(f"SMTP Server Response after Login: {response}")
+        server.sendmail(from_email, to_email, f"Subject: {subject}\n\n{body}")
+        print("send email...")
+        server.quit()
+    except Exception as e:
+        print("Exception while sending email:")
+        traceback.print_exc()
 
 class UsernameValidateView(View):
     def post(self,request):
@@ -28,62 +53,58 @@ class UsernameValidateView(View):
         return JsonResponse({'username_valid':True})
     
 class RegistrationView(View):
-    def get(self,request):
-        return render(request,'authentication/register.html')
     
-    def post(self,request):
-        username=request.POST['username']
-        email=request.POST['email']
-        password=request.POST['password']
-        
-        context={
-            'fieldValues':request.POST
+    def get(self, request):
+        return render(request, 'authentication/register.html')
+
+    def post(self, request):
+        username = request.POST['username']
+        recipient_email = request.POST['email']  
+        password = request.POST['password']
+
+        context = {
+            'fieldValues': request.POST
         }
-        
+
         if not User.objects.filter(username=username).exists():
-            if not User.objects.filter(email=email).exists():
-                if len(password)<6:
-                    messages.error(request,"Password too short")
-                    return render(request,'authentication/register.html',context)
+            if not User.objects.filter(email=recipient_email).exists():
+                if len(password) < 6:
+                    messages.error(request, "Password too short")
+                    return render(request, 'authentication/register.html', context)
                 elif not re.search("[A-Z]", password):  # Check for uppercase letter
                     messages.error(request, "Password should have at least one uppercase letter.")
-                    return render(request,'authentication/register.html',context)
+                    return render(request, 'authentication/register.html', context)
                 elif not re.search("[!@#$%^&*(),.?\":{}|<>]", password):  # Check for special character
                     messages.error(request, "Password should have at least one special character.")
-                    return render(request,'authentication/register.html',context)
-                user=User.objects.create_user(username=username, email=email)
-                user.set_password(password)
-                user.save()
-                #path_to_view
-                # -getting we are on
-                # -relative url verification
-                #encode uid
-                #token
-                current_site = get_current_site(request)
-                email_body = {
-                    'user': user,
-                    'domain': current_site.domain,
-                    'uid': urlsafe_base64_encode(force_bytes(user.pk)),
-                    'token': account_activation_token.make_token(user),
-                }
+                    return render(request, 'authentication/register.html', context)
+                
+                # Create the user and set is_active to False
+                user = User.objects.create_user(username=username, email=recipient_email, password=password, is_active=False)
 
+                uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+                domain = get_current_site(request).domain
                 link = reverse('activate', kwargs={
-                               'uidb64': email_body['uid'], 'token': email_body['token']})
+                    'uidb64': uidb64, 'token': token_generator.make_token(user)})
+                activate_url = 'http://' + domain + link
 
+                email_body = 'Hi ' + user.username + ', Please use this link to verify your account\n' + activate_url
                 email_subject = 'Activate your account'
 
-                activate_url = 'http://'+current_site.domain+link
-                email_subject='Actiavte your account'
-                email_body='Test body'
-                email=EmailMessage[
-                    email_subject,
-                    email_body,
-                    'noreply@semycolon.com',
-                    [email],
-                ]
-                messages.success(request,"Account created successfully")
-                
-        return render(request,'authentication/register.html')
+                try:
+                    send_mail(
+                        email_subject,
+                        email_body,
+                        settings.EMAIL_HOST_USER,
+                        [recipient_email],
+                        fail_silently=False,
+                    )
+                    messages.success(request, "Account created successfully, please check your email to verify.")
+                except Exception as e:
+                    print(f"Error sending email: {e}")
+                    messages.error(request, "Error sending verification email. Please try again.")
+
+                return redirect('login')
+        return render(request, 'authentication/register.html')
 class EmailValidateView(View):
     def post(self, request):
         try:
@@ -104,28 +125,60 @@ class EmailValidateView(View):
         except Exception as e:
             # This will return any exception that arises in the view, helping you pinpoint the exact issue.
             return JsonResponse({'error': str(e)}, status=500)
-        
+logger = logging.getLogger(__name__)
+       
 class VerificationView(View):
+
     def get(self, request, uidb64, token):
         try:
-            id = force_text(urlsafe_base64_decode(uidb64))
+            id = force_str(urlsafe_base64_decode(uidb64))
             user = User.objects.get(pk=id)
 
-            if not account_activation_token.check_token(user, token):
-                return redirect('login'+'?message='+'User already activated')
-
-            if user.is_active:
+            if not token_generator.check_token(user, token):
+                logger.error("Token verification failed for user %s", user.username)
+                messages.error(request, 'Invalid verification link or the link has expired.')
                 return redirect('login')
+
             user.is_active = True
             user.save()
 
-            messages.success(request, 'Account activated successfully')
-            return redirect('login')
+            auth.login(request, user)
+            messages.success(request, 'Account activated successfully, you are now logged in.')
+            return redirect('expenses')
 
         except Exception as ex:
-            pass
-
-        return redirect('login')
+            logger.error("Error during account verification: %s", ex)
+            messages.error(request, 'Error activating account, please try again.')
+            return redirect('login')
 class LoginView(View):
-    def get(self, request):
-        return render(request,'authentication/login.html')
+    def get(self, request):  
+        return render(request, 'authentication/login.html')
+
+    def post(self, request):
+        user_input = request.POST['username']
+        pass_input = request.POST['password']
+
+        if user_input and pass_input:
+            user = auth.authenticate(username=user_input, password=pass_input)
+            
+
+            if user:
+                if user.is_active:
+                    auth.login(request, user)
+                    messages.success(request, 'Welcome, ' + user.username + ', you are now logged in')
+                    return redirect('expenses')
+                    # TODO: Consider redirecting to a dashboard or another page after successful login.
+                else:
+                    messages.error(request, 'Account is not active, please check your email')
+                    return render(request, 'authentication/login.html')
+            else:
+                messages.error(request, 'Invalid credentials, try again')
+                return render(request, 'authentication/login.html')
+        else:
+            messages.error(request, 'Please fill all the fields')
+            return render(request, 'authentication/login.html')
+class LogoutView(View):
+    def post(self, request):
+        auth.logout(request)
+        messages.success(request, 'You have been logged out')
+        return redirect('login')           
