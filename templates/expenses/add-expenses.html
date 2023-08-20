@@ -1,4 +1,35 @@
 {% extends 'base.html' %}
+
+
+
+<nav style="--bs-breadcrumb-divider: '>';" aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{% url 'expenses' %}">Expenses</a></li>
+      <li class="breadcrumb-item active" aria-current="page">My Expenses</li>
+    </ol>
+  </nav>
+
+<form action ="{% url 'expenses' %}" method="post">
+
+    <div class="card">
+    <div class="card-body">
+      <form action="{% url 'add-expenses' %}" method="post">
+        {% include 'partials/_messages.html'%} {% csrf_token %}
+        <div class="form-group">
+          <label for="">Amount</label>
+          <input
+            type="text"
+            class="form-control form-control-sm"
+            name="amount"
+            value="{{values.amount}}"
+          />
+        </div>
+
+</form>
+
+
+
+
 {% block content %}
 <h1>Add Expenses </h1>
 {% endblock content  %}
